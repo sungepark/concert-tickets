@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shopping Cart - ConcertTix</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="logo">ConcertTix</a>
+      <div class="nav-links">
+        <a href="/">Events</a>
+        <a href="/cart" class="cart-link">
+          Cart <span class="cart-count" id="cart-count">0</span>
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Shopping Cart</h1>
+    <p class="subtitle">Review your tickets before checkout</p>
+
+    <div id="cart-content">
+      <div class="loading">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Get cart count from cookie
+    function getCartCount() {
+      const match = document.cookie.match(/cartCount=(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    }
+
+    // Update cart count display
+    function updateCartCountDisplay() {
+      document.getElementById('cart-count').textContent = getCartCount();
+    }
+
+    // Format date nicely
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+
+    // Format price
+    function formatPrice(price) {
+      return '$' + price.toFixed(2);
+    }
+
+    // Show toast notification
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Load and display cart
+    async function loadCart() {
+      try {
+        const response = await fetch('/api/cart');
+        const cart = await response.json();
+
+        const content = document.getElementById('cart-content');
+
+        if (cart.items.length === 0) {
+          content.innerHTML = `
+            <div class="empty-state">
+              <h2>Your Cart is Empty</h2>
+              <p>Browse our upcoming concerts and find your next experience!</p>
+              <a href="/" class="btn btn-primary">Browse Events</a>
+            </div>
+          `;
+          return;
+        }
+
+        const itemsHtml = cart.items.map(item => `
+          <div class="cart-item" data-cart-id="${item.cart_id}">
+            <img src="${item.image_url}" alt="${item.artist_name}">
+            <div class="cart-item-info">
+              <h3>${item.artist_name}</h3>
+              <div class="venue">${item.venue_name}</div>
+              <div class="date">${formatDate(item.event_date)}</div>
+            </div>
+            <div class="cart-item-actions">
+              <div class="price">${formatPrice(item.ticket_price * item.quantity)}</div>
+              <div class="quantity-controls">
+                <button class="quantity-btn" onclick="updateQuantity(${item.cart_id}, ${item.quantity - 1})">-</button>
+                <span>${item.quantity}</span>
+                <button class="quantity-btn" onclick="updateQuantity(${item.cart_id}, ${item.quantity + 1})">+</button>
+              </div>
+              <button class="remove-btn" onclick="removeItem(${item.cart_id})">Remove</button>
+            </div>
+          </div>
+        `).join('');
+
+        const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+        const serviceFee = cart.total * 0.1;
+        const grandTotal = cart.total + serviceFee;
+
+        content.innerHTML = `
+          <div class="cart-container">
+            <div class="cart-items">
+              ${itemsHtml}
+            </div>
+
+            <div class="cart-summary">
+              <h2>Order Summary</h2>
+              <div class="summary-line">
+                <span>Tickets (${itemCount})</span>
+                <span>${formatPrice(cart.total)}</span>
+              </div>
+              <div class="summary-line">
+                <span>Service Fee</span>
+                <span>${formatPrice(serviceFee)}</span>
+              </div>
+              <div class="summary-line summary-total">
+                <span>Total</span>
+                <span>${formatPrice(grandTotal)}</span>
+              </div>
+              <button class="btn btn-primary checkout-btn" onclick="checkout()">
+                Proceed to Checkout
+              </button>
+              <button class="btn btn-secondary checkout-btn" onclick="clearCart()" style="margin-top: 0.5rem;">
+                Clear Cart
+              </button>
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        console.error('Error loading cart:', error);
+        document.getElementById('cart-content').innerHTML = `
+          <div class="empty-state">
+            <h2>Error Loading Cart</h2>
+            <p>Please try again later.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Update item quantity
+    async function updateQuantity(cartId, newQuantity) {
+      try {
+        const response = await fetch(`/api/cart/${cartId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ quantity: newQuantity })
+        });
+
+        if (response.ok) {
+          loadCart();
+          updateCartCountDisplay();
+        }
+      } catch (error) {
+        console.error('Error updating quantity:', error);
+        showToast('Failed to update quantity');
+      }
+    }
+
+    // Remove item from cart
+    async function removeItem(cartId) {
+      try {
+        const response = await fetch(`/api/cart/${cartId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          showToast('Item removed from cart');
+          loadCart();
+          updateCartCountDisplay();
+        }
+      } catch (error) {
+        console.error('Error removing item:', error);
+        showToast('Failed to remove item');
+      }
+    }
+
+    // Clear entire cart
+    async function clearCart() {
+      if (!confirm('Are you sure you want to clear your cart?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/cart', {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          showToast('Cart cleared');
+          loadCart();
+          updateCartCountDisplay();
+        }
+      } catch (error) {
+        console.error('Error clearing cart:', error);
+        showToast('Failed to clear cart');
+      }
+    }
+
+    // Proceed to checkout summary
+    function checkout() {
+      window.location.href = '/cart-summary';
+    }
+
+    // Initialize
+    updateCartCountDisplay();
+    loadCart();
+  </script>
+</body>
+</html>

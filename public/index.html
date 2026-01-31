@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concert Tickets - Find Your Next Show</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="logo">ConcertTix</a>
+      <div class="nav-links">
+        <a href="/">Events</a>
+        <a href="/cart" class="cart-link">
+          Cart <span class="cart-count" id="cart-count">0</span>
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Upcoming Concerts</h1>
+    <p class="subtitle">Discover and book tickets for the hottest shows in town</p>
+
+    <div class="events-grid" id="events-grid">
+      <div class="loading">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Get cart count from cookie
+    function getCartCount() {
+      const match = document.cookie.match(/cartCount=(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    }
+
+    // Update cart count display
+    function updateCartCount() {
+      document.getElementById('cart-count').textContent = getCartCount();
+    }
+
+    // Format date nicely
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+
+    // Format price
+    function formatPrice(price) {
+      return '$' + price.toFixed(2);
+    }
+
+    // Load and display events
+    async function loadEvents() {
+      try {
+        const response = await fetch('/api/events');
+        const events = await response.json();
+
+        const grid = document.getElementById('events-grid');
+
+        if (events.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-state">
+              <h2>No Events Available</h2>
+              <p>Check back soon for upcoming concerts!</p>
+            </div>
+          `;
+          return;
+        }
+
+        grid.innerHTML = events.map(event => `
+          <div class="event-card" onclick="window.location.href='/event/${event.id}'">
+            <img src="${event.image_url}" alt="${event.artist_name}">
+            <div class="event-card-content">
+              <h3>${event.artist_name}</h3>
+              <div class="venue">${event.venue_name}</div>
+              <div class="date">${formatDate(event.event_date)}</div>
+              <div class="price">${formatPrice(event.ticket_price)}</div>
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading events:', error);
+        document.getElementById('events-grid').innerHTML = `
+          <div class="empty-state">
+            <h2>Error Loading Events</h2>
+            <p>Please try again later.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Initialize
+    updateCartCount();
+    loadEvents();
+  </script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Details - ConcertTix</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="logo">ConcertTix</a>
+      <div class="nav-links">
+        <a href="/">Events</a>
+        <a href="/cart" class="cart-link">
+          Cart <span class="cart-count" id="cart-count">0</span>
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <a href="/" class="back-link">&larr; Back to Events</a>
+
+    <div id="event-content">
+      <div class="loading">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Get event ID from URL
+    const eventId = window.location.pathname.split('/').pop();
+
+    // Get cart count from cookie
+    function getCartCount() {
+      const match = document.cookie.match(/cartCount=(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    }
+
+    // Update cart count display
+    function updateCartCount() {
+      document.getElementById('cart-count').textContent = getCartCount();
+    }
+
+    // Format date nicely
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+
+    // Format price
+    function formatPrice(price) {
+      return '$' + price.toFixed(2);
+    }
+
+    // Show toast notification
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Load and display event details
+    async function loadEvent() {
+      try {
+        const response = await fetch(`/api/events/${eventId}`);
+
+        if (!response.ok) {
+          throw new Error('Event not found');
+        }
+
+        const event = await response.json();
+
+        document.title = `${event.artist_name} - ConcertTix`;
+
+        document.getElementById('event-content').innerHTML = `
+          <div class="event-detail">
+            <div class="event-info">
+              <img src="${event.image_url}" alt="${event.artist_name}" class="event-image">
+              <h1>${event.artist_name}</h1>
+              <div class="venue">${event.venue_name}</div>
+              <div class="date">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                ${formatDate(event.event_date)}
+              </div>
+              <p class="description">${event.description}</p>
+            </div>
+
+            <div class="ticket-box">
+              <h2>Get Tickets</h2>
+              <div class="price">${formatPrice(event.ticket_price)}</div>
+              <div class="availability">${event.available_tickets} tickets available</div>
+
+              <div class="quantity-selector">
+                <label for="quantity">Quantity:</label>
+                <input type="number" id="quantity" value="1" min="1" max="${event.available_tickets}">
+              </div>
+
+              <div class="total-line">
+                <span>Total:</span>
+                <span id="total-price">${formatPrice(event.ticket_price)}</span>
+              </div>
+
+              <button class="btn btn-primary" id="add-to-cart" data-event-id="${event.id}" data-price="${event.ticket_price}">
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        `;
+
+        // Set up quantity change handler
+        const quantityInput = document.getElementById('quantity');
+        const totalPrice = document.getElementById('total-price');
+        const price = event.ticket_price;
+
+        quantityInput.addEventListener('change', () => {
+          const qty = parseInt(quantityInput.value) || 1;
+          totalPrice.textContent = formatPrice(price * qty);
+        });
+
+        quantityInput.addEventListener('input', () => {
+          const qty = parseInt(quantityInput.value) || 1;
+          totalPrice.textContent = formatPrice(price * qty);
+        });
+
+        // Set up add to cart handler
+        document.getElementById('add-to-cart').addEventListener('click', addToCart);
+
+      } catch (error) {
+        console.error('Error loading event:', error);
+        document.getElementById('event-content').innerHTML = `
+          <div class="empty-state">
+            <h2>Event Not Found</h2>
+            <p>The event you're looking for doesn't exist or has been removed.</p>
+            <a href="/" class="btn btn-primary">Browse Events</a>
+          </div>
+        `;
+      }
+    }
+
+    // Add to cart function
+    async function addToCart() {
+      const button = document.getElementById('add-to-cart');
+      const quantity = parseInt(document.getElementById('quantity').value) || 1;
+
+      button.disabled = true;
+      button.textContent = 'Adding...';
+
+      try {
+        const response = await fetch('/api/cart', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            eventId: parseInt(eventId),
+            quantity: quantity
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showToast(`${quantity} ticket${quantity > 1 ? 's' : ''} added to cart!`);
+          updateCartCount();
+        } else {
+          showToast(result.error || 'Failed to add to cart');
+        }
+      } catch (error) {
+        console.error('Error adding to cart:', error);
+        showToast('Failed to add to cart');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Add to Cart';
+      }
+    }
+
+    // Initialize
+    updateCartCount();
+    loadEvent();
+  </script>
+</body>
+</html>
