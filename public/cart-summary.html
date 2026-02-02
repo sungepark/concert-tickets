@@ -336,6 +336,22 @@
                 <span class="value">${formatPrice(grandTotal)}</span>
               </div>
 
+              <div class="checkout-form" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                <label for="customer-email" style="display: block; margin-bottom: 0.5rem; color: #a0a0a0; font-size: 0.9rem;">
+                  Email Address <span style="color: #e94560;">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="customer-email"
+                  placeholder="your.email@example.com"
+                  required
+                  style="width: 100%; padding: 0.75rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #fff; font-size: 0.95rem;"
+                />
+                <p style="font-size: 0.8rem; color: #a0a0a0; margin-top: 0.5rem; margin-bottom: 0;">
+                  We'll send your order confirmation to this email
+                </p>
+              </div>
+
               <div class="action-buttons">
                 <button class="btn btn-primary" onclick="placeOrder()">
                   Place Order
@@ -361,6 +377,24 @@
 
     async function placeOrder() {
       try {
+        // Get and validate email
+        const emailInput = document.getElementById('customer-email');
+        const email = emailInput ? emailInput.value.trim() : '';
+
+        if (!email) {
+          showToast('Please enter your email address');
+          if (emailInput) emailInput.focus();
+          return;
+        }
+
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          showToast('Please enter a valid email address');
+          if (emailInput) emailInput.focus();
+          return;
+        }
+
         const response = await fetch('/api/cart');
         const cart = await response.json();
 
@@ -380,14 +414,15 @@
         const tax = taxableAmount * TAX_RATE;
         const grandTotal = taxableAmount + tax;
 
-        // Place order
+        // Place order with email
         const orderResponse = await fetch('/api/orders', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            totalAmount: grandTotal
+            totalAmount: grandTotal,
+            customerEmail: email
           })
         });
 
@@ -397,10 +432,10 @@
           showToast('Order placed successfully!');
           updateCartCountDisplay();
 
-          // Redirect to home page after 2 seconds
+          // Redirect to order confirmation page with order ID
           setTimeout(() => {
-            window.location.href = '/';
-          }, 2000);
+            window.location.href = `/order-confirmation?id=${result.orderId}`;
+          }, 1500);
         } else {
           showToast(result.error || 'Failed to place order');
         }

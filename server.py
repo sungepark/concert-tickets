@@ -54,6 +54,7 @@ def init_database():
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
+            customer_email TEXT,
             total_amount REAL NOT NULL,
             order_date TEXT DEFAULT CURRENT_TIMESTAMP,
             status TEXT DEFAULT 'pending'
@@ -129,6 +130,59 @@ def row_to_dict(row):
 def rows_to_list(rows):
     """Convert a list of sqlite3.Row to a list of dictionaries."""
     return [dict(row) for row in rows]
+
+
+def send_order_confirmation_email(order_id, customer_email, items, total_amount):
+    """
+    Send order confirmation email.
+    For development: prints to console. For production: implement SMTP.
+    """
+    if not customer_email:
+        return
+
+    # Format items for email
+    items_text = '\n'.join([
+        f"  - {item['artist_name']} at {item['venue_name']}"
+        f" ({item['quantity']} ticket{'s' if item['quantity'] != 1 else ''} × ${item['ticket_price']:.2f})"
+        for item in items
+    ])
+
+    email_content = f"""
+    ================================================================================
+    ORDER CONFIRMATION EMAIL
+    ================================================================================
+
+    To: {customer_email}
+    Subject: Your ConcertTix Order Confirmation - Order #{order_id}
+
+    Dear Customer,
+
+    Thank you for your order! Your tickets have been confirmed.
+
+    Order Details:
+    Order Number: #{order_id}
+
+    Items:
+{items_text}
+
+    Total Amount: ${total_amount:.2f}
+
+    What's Next:
+    - Arrive at least 30 minutes before the event
+    - Bring a valid photo ID for entry
+    - Present this confirmation at the venue
+
+    View your order online: http://localhost:3000/order-confirmation?id={order_id}
+
+    Enjoy your concert!
+
+    Best regards,
+    The ConcertTix Team
+    ================================================================================
+    """
+
+    print(email_content)
+    print('[EMAIL] Order confirmation email sent to:', customer_email)
 
 
 class ConcertHandler(http.server.BaseHTTPRequestHandler):
@@ -263,6 +317,39 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({'items': items, 'total': total})
             return
 
+        if path.startswith('/api/orders/'):
+            order_id = path.split('/')[-1]
+            conn = get_db()
+            cursor = conn.cursor()
+
+            # Get order details
+            cursor.execute('SELECT * FROM orders WHERE id = ?', (order_id,))
+            order = row_to_dict(cursor.fetchone())
+
+            if not order:
+                conn.close()
+                self.send_json({'error': 'Order not found'}, 404)
+                return
+
+            # Get order items with event details
+            cursor.execute('''
+                SELECT
+                    order_items.quantity,
+                    order_items.price_at_purchase,
+                    events.artist_name,
+                    events.venue_name,
+                    events.event_date
+                FROM order_items
+                JOIN events ON order_items.event_id = events.id
+                WHERE order_items.order_id = ?
+            ''', (order_id,))
+            items = rows_to_list(cursor.fetchall())
+            conn.close()
+
+            order['items'] = items
+            self.send_json(order)
+            return
+
         # Static files and HTML pages
         if path == '/':
             self.send_file(PUBLIC_DIR / 'index.html')
@@ -278,6 +365,10 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
 
         if path == '/cart-summary':
             self.send_file(PUBLIC_DIR / 'cart-summary.html')
+            return
+
+        if path == '/order-confirmation':
+            self.send_file(PUBLIC_DIR / 'order-confirmation.html')
             return
 
         # Try to serve static file
@@ -357,6 +448,7 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
 
             body = self.get_request_body()
             total_amount = body.get('totalAmount')
+            customer_email = body.get('customerEmail', '')
 
             if not total_amount:
                 self.send_json({'error': 'Total amount is required'}, 400)
@@ -392,10 +484,10 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
                     }, 400)
                     return
 
-            # Create order
+            # Create order with email
             cursor.execute(
-                'INSERT INTO orders (session_id, total_amount, status) VALUES (?, ?, ?)',
-                (session_id, total_amount, 'completed')
+                'INSERT INTO orders (session_id, customer_email, total_amount, status) VALUES (?, ?, ?, ?)',
+                (session_id, customer_email, total_amount, 'completed')
             )
             order_id = cursor.lastrowid
 
@@ -417,6 +509,10 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
 
             conn.commit()
             conn.close()
+
+            # Send confirmation email
+            if customer_email:
+                send_order_confirmation_email(order_id, customer_email, cart_items, total_amount)
 
             self.send_json({
                 'success': True,
