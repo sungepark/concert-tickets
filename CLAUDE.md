@@ -62,3 +62,27 @@ Single-file HTTP server handling:
 - `formatDate(dateStr)` - Formats dates for display
 - `showToast(message)` - Shows notification toast
 - `getCartCount()` / `updateCartCountDisplay()` - Cart badge management
+
+## Git Workflow
+When completing tasks from TASKS.md:
+1. Create a new branch named `feature/<task-number>-<brief-description>` before starting work
+2. Make atomic commits with conventional commit messages:
+    - feat: for new features
+    - fix: for bug fixes
+    - docs: for documentation
+    - test: for tests
+    - refactor: for refactoring
+3. After completing a task, create a pull request with:
+    - A descriptive title matching the task
+    - A summary of changes made
+    - Any testing notes or considerations
+4. Update the task checkbox in TASKS.md to mark it complete
+
+## Testing Requirements
+Before marking any task as complete:
+1. Write unit tests for new functionality
+2. Run the full test suite with: `npm test`
+3. If tests fail:
+    - Analyze the failure output
+    - Fix the code (no the tests, unless tests are incorrect)
+    - Re-run tests until all pass

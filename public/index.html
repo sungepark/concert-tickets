@@ -79,7 +79,8 @@
         }
 
         grid.innerHTML = events.map(event => `
-          <div class="event-card" onclick="window.location.href='/event/${event.id}'">
+          <div class="event-card ${event.available_tickets === 0 ? 'sold-out' : ''}" onclick="window.location.href='/event/${event.id}'">
+            ${event.available_tickets === 0 ? '<div class="sold-out-badge">SOLD OUT</div>' : ''}
             <img src="${event.image_url}" alt="${event.artist_name}">
             <div class="event-card-content">
               <h3>${event.artist_name}</h3>
