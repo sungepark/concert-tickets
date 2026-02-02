@@ -18,7 +18,7 @@ These features are essential to complete the core purchase flow.
 - Update cart-summary.html to send order data
 - Clear cart after successful order placement
 
-### [ ] 1.2 Inventory Management
+### [x] 1.2 Inventory Management
 **Description**: Deduct available_tickets when orders are placed
 **Affected Files**: `server.py`
 **Dependencies**: Task 1.1
