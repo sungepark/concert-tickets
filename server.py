@@ -214,7 +214,6 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
             cursor.execute('''
                 SELECT id, artist_name, venue_name, event_date, ticket_price, image_url, available_tickets
                 FROM events
-                WHERE available_tickets > 0
                 ORDER BY event_date ASC
             ''')
             events = rows_to_list(cursor.fetchall())

@@ -104,42 +104,52 @@
             <div class="ticket-box">
               <h2>Get Tickets</h2>
               <div class="price">${formatPrice(event.ticket_price)}</div>
-              <div class="availability">${event.available_tickets} tickets available</div>
+              ${event.available_tickets === 0 ? `
+                <div class="sold-out-message">
+                  <div class="sold-out-badge" style="position: relative; top: 0; right: 0; margin: 1rem 0;">SOLD OUT</div>
+                  <p style="color: #a0a0a0; font-size: 0.9rem;">This event has no remaining tickets available.</p>
+                </div>
+              ` : `
+                <div class="availability">${event.available_tickets} tickets available</div>
 
-              <div class="quantity-selector">
-                <label for="quantity">Quantity:</label>
-                <input type="number" id="quantity" value="1" min="1" max="${event.available_tickets}">
-              </div>
+                <div class="quantity-selector">
+                  <label for="quantity">Quantity:</label>
+                  <input type="number" id="quantity" value="1" min="1" max="${event.available_tickets}">
+                </div>
 
-              <div class="total-line">
-                <span>Total:</span>
-                <span id="total-price">${formatPrice(event.ticket_price)}</span>
-              </div>
+                <div class="total-line">
+                  <span>Total:</span>
+                  <span id="total-price">${formatPrice(event.ticket_price)}</span>
+                </div>
 
-              <button class="btn btn-primary" id="add-to-cart" data-event-id="${event.id}" data-price="${event.ticket_price}">
-                Add to Cart
-              </button>
+                <button class="btn btn-primary" id="add-to-cart" data-event-id="${event.id}" data-price="${event.ticket_price}">
+                  Add to Cart
+                </button>
+              `}
             </div>
           </div>
         `;
 
-        // Set up quantity change handler
-        const quantityInput = document.getElementById('quantity');
-        const totalPrice = document.getElementById('total-price');
-        const price = event.ticket_price;
+        // Only set up handlers if not sold out
+        if (event.available_tickets > 0) {
+          // Set up quantity change handler
+          const quantityInput = document.getElementById('quantity');
+          const totalPrice = document.getElementById('total-price');
+          const price = event.ticket_price;
 
-        quantityInput.addEventListener('change', () => {
-          const qty = parseInt(quantityInput.value) || 1;
-          totalPrice.textContent = formatPrice(price * qty);
-        });
+          quantityInput.addEventListener('change', () => {
+            const qty = parseInt(quantityInput.value) || 1;
+            totalPrice.textContent = formatPrice(price * qty);
+          });
 
-        quantityInput.addEventListener('input', () => {
-          const qty = parseInt(quantityInput.value) || 1;
-          totalPrice.textContent = formatPrice(price * qty);
-        });
+          quantityInput.addEventListener('input', () => {
+            const qty = parseInt(quantityInput.value) || 1;
+            totalPrice.textContent = formatPrice(price * qty);
+          });
 
-        // Set up add to cart handler
-        document.getElementById('add-to-cart').addEventListener('click', addToCart);
+          // Set up add to cart handler
+          document.getElementById('add-to-cart').addEventListener('click', addToCart);
+        }
 
       } catch (error) {
         console.error('Error loading event:', error);
