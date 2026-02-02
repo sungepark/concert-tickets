@@ -50,6 +50,28 @@ def init_database():
         )
     ''')
 
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            total_amount REAL NOT NULL,
+            order_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'pending'
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS order_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            event_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            price_at_purchase REAL NOT NULL,
+            FOREIGN KEY (order_id) REFERENCES orders(id),
+            FOREIGN KEY (event_id) REFERENCES events(id)
+        )
+    ''')
+
     # Check if we need to seed data
     cursor.execute('SELECT COUNT(*) as count FROM events')
     if cursor.fetchone()['count'] == 0:
@@ -325,6 +347,82 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
 
             conn.close()
             self.send_json({'success': True, 'message': 'Added to cart'}, cookies=cookies)
+            return
+
+        if path == '/api/orders':
+            session_id = self.get_session_id()
+            if not session_id:
+                self.send_json({'error': 'No session'}, 401)
+                return
+
+            body = self.get_request_body()
+            total_amount = body.get('totalAmount')
+
+            if not total_amount:
+                self.send_json({'error': 'Total amount is required'}, 400)
+                return
+
+            conn = get_db()
+            cursor = conn.cursor()
+
+            # Get cart items
+            cursor.execute('''
+                SELECT
+                    cart_items.event_id,
+                    cart_items.quantity,
+                    events.ticket_price,
+                    events.available_tickets
+                FROM cart_items
+                JOIN events ON cart_items.event_id = events.id
+                WHERE cart_items.session_id = ?
+            ''', (session_id,))
+            cart_items = rows_to_list(cursor.fetchall())
+
+            if not cart_items:
+                conn.close()
+                self.send_json({'error': 'Cart is empty'}, 400)
+                return
+
+            # Verify ticket availability
+            for item in cart_items:
+                if item['available_tickets'] < item['quantity']:
+                    conn.close()
+                    self.send_json({
+                        'error': f'Not enough tickets available for event ID {item["event_id"]}'
+                    }, 400)
+                    return
+
+            # Create order
+            cursor.execute(
+                'INSERT INTO orders (session_id, total_amount, status) VALUES (?, ?, ?)',
+                (session_id, total_amount, 'completed')
+            )
+            order_id = cursor.lastrowid
+
+            # Create order items and update inventory
+            for item in cart_items:
+                cursor.execute(
+                    'INSERT INTO order_items (order_id, event_id, quantity, price_at_purchase) VALUES (?, ?, ?, ?)',
+                    (order_id, item['event_id'], item['quantity'], item['ticket_price'])
+                )
+
+                # Deduct available tickets
+                cursor.execute(
+                    'UPDATE events SET available_tickets = available_tickets - ? WHERE id = ?',
+                    (item['quantity'], item['event_id'])
+                )
+
+            # Clear cart
+            cursor.execute('DELETE FROM cart_items WHERE session_id = ?', (session_id,))
+
+            conn.commit()
+            conn.close()
+
+            self.send_json({
+                'success': True,
+                'orderId': order_id,
+                'message': 'Order placed successfully'
+            }, cookies={'cartCount': '0'})
             return
 
         self.send_error(404)

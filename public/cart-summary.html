@@ -359,8 +359,55 @@
       }
     }
 
-    function placeOrder() {
-      showToast('Order placement coming soon!');
+    async function placeOrder() {
+      try {
+        const response = await fetch('/api/cart');
+        const cart = await response.json();
+
+        if (cart.items.length === 0) {
+          showToast('Your cart is empty');
+          return;
+        }
+
+        // Calculate totals
+        const totalTickets = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+        const subtotal = cart.total;
+        const serviceFee = subtotal * SERVICE_FEE_RATE;
+        const facilityFee = totalTickets * FACILITY_FEE_PER_TICKET;
+        const processingFee = ORDER_PROCESSING_FEE;
+        const feesSubtotal = serviceFee + facilityFee + processingFee;
+        const taxableAmount = subtotal + feesSubtotal;
+        const tax = taxableAmount * TAX_RATE;
+        const grandTotal = taxableAmount + tax;
+
+        // Place order
+        const orderResponse = await fetch('/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            totalAmount: grandTotal
+          })
+        });
+
+        const result = await orderResponse.json();
+
+        if (orderResponse.ok) {
+          showToast('Order placed successfully!');
+          updateCartCountDisplay();
+
+          // Redirect to home page after 2 seconds
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 2000);
+        } else {
+          showToast(result.error || 'Failed to place order');
+        }
+      } catch (error) {
+        console.error('Error placing order:', error);
+        showToast('Error placing order. Please try again.');
+      }
     }
 
     updateCartCountDisplay();
