@@ -28,7 +28,7 @@ These features are essential to complete the core purchase flow.
 - Prevent overselling by checking availability before order confirmation
 - Show "Sold Out" badge on event cards when available_tickets = 0
 
-### [ ] 1.3 Order Confirmation Page
+### [x] 1.3 Order Confirmation Page
 **Description**: Create confirmation page shown after successful order
 **Affected Files**: New `public/order-confirmation.html`, `server.py`
 **Dependencies**: Task 1.1
@@ -38,7 +38,7 @@ These features are essential to complete the core purchase flow.
 - Provide printable ticket view
 - Add "View Order History" and "Browse More Events" links
 
-### [ ] 1.4 Email Notifications
+### [x] 1.4 Email Notifications
 **Description**: Send confirmation emails after purchase
 **Affected Files**: `server.py`
 **Dependencies**: Task 1.1, requires email collection
