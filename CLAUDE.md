@@ -38,6 +38,9 @@ Single-file HTTP server handling:
 - `PUT /api/cart/:id` - Update cart item quantity
 - `DELETE /api/cart/:id` - Remove cart item
 - `DELETE /api/cart` - Clear entire cart
+- `POST /api/orders` - Place order from cart
+
+See [/docs/api.md](/docs/api.md) for detailed API documentation.
 
 **URL Routing:** Explicit routes exist for `/`, `/cart`, `/cart-summary`, and `/event/:id`. New pages require adding routes in `do_GET()`.
 
@@ -86,3 +89,34 @@ Before marking any task as complete:
     - Analyze the failure output
     - Fix the code (no the tests, unless tests are incorrect)
     - Re-run tests until all pass
+
+## Documentation Requirements
+### README.md
+Keep updated with:
+    - Quick start instructions (clone, install, run)
+    - Environment variables table with descriptions
+    - Available pip or npm scripts and what they do
+Update README when:
+    - Adding new features or endpoints
+    - Changing environment variables
+    - Adding new pip or npm scripts or dependencies
+### Code Comments
+Add comments when:
+    - The "why" isn't obvious from the code
+    - There's a non-obvious edge case being handled
+    - You're working around a bud or limitation
+    - The function has complex paraemeters or return values
+Don't add comments when:
+    - The code is self-explanatory
+    - You'd just be restarting what the code does
+
+###API Documentation
+Maintain a simple API reference in /docs/api.md with:
+    - Endpoint URL and method
+    - Brief description
+    - Whether auth is required
+    - Request body example (if applicable)
+    - Success response example
+    - Format example
+
+
