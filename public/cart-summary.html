@@ -187,6 +187,7 @@
         <a href="/cart" class="cart-link">
           Cart <span class="cart-count" id="cart-count">0</span>
         </a>
+        <div id="auth-nav"></div>
       </div>
     </nav>
   </header>
@@ -239,6 +240,49 @@
       toast.textContent = message;
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Get current user
+    async function getCurrentUser() {
+      try {
+        const response = await fetch('/api/user');
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+      return null;
+    }
+
+    // Update navigation based on user state
+    async function updateNavigation() {
+      const authNav = document.getElementById('auth-nav');
+      const user = await getCurrentUser();
+
+      if (user) {
+        authNav.innerHTML = `
+          <div class="user-menu">
+            <span class="user-name">Welcome, ${user.name}</span>
+            <a href="#" onclick="logout(); return false;">Logout</a>
+          </div>
+        `;
+      } else {
+        authNav.innerHTML = `
+          <a href="/login">Login</a>
+          <a href="/register">Register</a>
+        `;
+      }
+    }
+
+    // Logout function
+    async function logout() {
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
     }
 
     async function loadSummary() {
@@ -446,6 +490,7 @@
     }
 
     updateCartCountDisplay();
+    updateNavigation();
     loadSummary();
   </script>
 </body>

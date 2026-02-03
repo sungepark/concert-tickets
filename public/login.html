@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - ConcertTix</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="logo">ConcertTix</a>
+      <div class="nav-links">
+        <a href="/">Events</a>
+        <a href="/register">Register</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <div class="auth-container">
+      <div class="auth-card">
+        <h1>Welcome Back</h1>
+        <p class="subtitle">Log in to your ConcertTix account</p>
+
+        <div class="form-error" id="form-error"></div>
+
+        <form id="login-form" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="email">Email Address <span class="required">*</span></label>
+            <input
+              type="email"
+              id="email"
+              class="form-input"
+              placeholder="you@example.com"
+              required
+            />
+            <div class="error-message" id="email-error"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password <span class="required">*</span></label>
+            <input
+              type="password"
+              id="password"
+              class="form-input"
+              placeholder="Enter your password"
+              required
+            />
+            <div class="error-message" id="password-error"></div>
+          </div>
+
+          <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; margin: 0; cursor: pointer;">
+              <input type="checkbox" id="remember-me" style="width: auto; margin: 0;">
+              <span style="font-size: 0.9rem; color: #a0a0a0;">Remember me</span>
+            </label>
+            <a href="#" class="forgot-password" onclick="handleForgotPassword(event)">Forgot password?</a>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="submit-btn" style="width: 100%; margin-top: 1.5rem;">
+            Log In
+          </button>
+        </form>
+
+        <div class="auth-links">
+          Don't have an account? <a href="/register">Register here</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function showError(elementId, message) {
+      const errorEl = document.getElementById(elementId);
+      errorEl.textContent = message;
+      errorEl.classList.add('show');
+    }
+
+    function hideError(elementId) {
+      const errorEl = document.getElementById(elementId);
+      errorEl.classList.remove('show');
+    }
+
+    function showFormError(message) {
+      const formError = document.getElementById('form-error');
+      formError.textContent = message;
+      formError.classList.add('show');
+    }
+
+    function hideFormError() {
+      document.getElementById('form-error').classList.remove('show');
+    }
+
+    function handleForgotPassword(event) {
+      event.preventDefault();
+      alert('Password reset functionality will be available soon. Please contact support if you need assistance.');
+    }
+
+    async function handleLogin(event) {
+      event.preventDefault();
+      hideFormError();
+      hideError('email-error');
+      hideError('password-error');
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const rememberMe = document.getElementById('remember-me').checked;
+
+      // Client-side validation
+      let hasError = false;
+
+      if (!email) {
+        showError('email-error', 'Email is required');
+        hasError = true;
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError('email-error', 'Please enter a valid email address');
+        hasError = true;
+      }
+
+      if (!password) {
+        showError('password-error', 'Password is required');
+        hasError = true;
+      }
+
+      if (hasError) return;
+
+      // Disable submit button
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Logging in...';
+
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password, rememberMe })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Login successful, redirect to home page
+          window.location.href = '/';
+        } else {
+          // Show error message
+          showFormError(data.error || 'Login failed. Please try again.');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Log In';
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        showFormError('An error occurred. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Log In';
+      }
+    }
+  </script>
+</body>
+</html>

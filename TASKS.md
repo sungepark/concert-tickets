@@ -1,3 +1,4 @@
+
 # ConcertTix - Future Development Tasks
 
 This document outlines potential features and improvements for the ConcertTix concert ticket selling application. Tasks are organized by priority and category.
@@ -54,7 +55,7 @@ These features are essential to complete the core purchase flow.
 
 Enable users to create accounts and track their purchases.
 
-### [ ] 2.1 User Registration & Login
+### [x] 2.1 User Registration & Login
 **Description**: Implement user authentication system
 **Affected Files**: `server.py`, new `public/login.html`, `public/register.html`
 **Details**:

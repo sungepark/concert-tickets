@@ -4,11 +4,15 @@ Concert Tickets - A simple ticket selling prototype
 Uses Python's built-in http.server and sqlite3 (no external dependencies)
 """
 
+import hashlib
 import http.server
 import json
 import os
+import re
+import secrets
 import sqlite3
 import uuid
+from datetime import datetime, timedelta
 from http.cookies import SimpleCookie
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
@@ -17,6 +21,32 @@ from pathlib import Path
 PORT = 3000
 DB_PATH = Path(__file__).parent / 'concerts.db'
 PUBLIC_DIR = Path(__file__).parent / 'public'
+
+# User session management (in-memory)
+user_sessions = {}  # {session_id: user_id}
+
+
+def hash_password(password):
+    """Hash a password using PBKDF2 with a random salt."""
+    salt = secrets.token_hex(32)  # 32-byte salt
+    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return f"{salt}:{pwd_hash.hex()}"
+
+
+def verify_password(stored_password, provided_password):
+    """Verify a provided password against the stored hash."""
+    try:
+        salt, pwd_hash = stored_password.split(':')
+        computed_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt.encode('utf-8'), 100000)
+        return computed_hash.hex() == pwd_hash
+    except Exception:
+        return False
+
+
+def validate_email(email):
+    """Validate email format."""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
 
 def init_database():
@@ -40,6 +70,17 @@ def init_database():
     ''')
 
     cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_login TEXT
+        )
+    ''')
+
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS cart_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
@@ -54,10 +95,12 @@ def init_database():
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
+            user_id INTEGER,
             customer_email TEXT,
             total_amount REAL NOT NULL,
             order_date TEXT DEFAULT CURRENT_TIMESTAMP,
-            status TEXT DEFAULT 'pending'
+            status TEXT DEFAULT 'pending',
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
 
@@ -195,6 +238,14 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
             return cookie['sessionId'].value
         return None
 
+    def get_user_id(self):
+        """Get user ID from session if authenticated."""
+        global user_sessions
+        session_id = self.get_session_id()
+        if session_id:
+            return user_sessions.get(session_id)
+        return None
+
     def set_cookies(self, cookies_dict):
         """Set cookies in the response."""
         for name, value in cookies_dict.items():
@@ -262,6 +313,24 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
         path = parsed.path
 
         # API routes
+        if path == '/api/user':
+            user_id = self.get_user_id()
+            if not user_id:
+                self.send_json({'error': 'Not authenticated'}, 401)
+                return
+
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, email, name, created_at FROM users WHERE id = ?', (user_id,))
+            user = row_to_dict(cursor.fetchone())
+            conn.close()
+
+            if user:
+                self.send_json(user)
+            else:
+                self.send_json({'error': 'User not found'}, 404)
+            return
+
         if path == '/api/events':
             conn = get_db()
             cursor = conn.cursor()
@@ -371,6 +440,14 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
             self.send_file(PUBLIC_DIR / 'order-confirmation.html')
             return
 
+        if path == '/login':
+            self.send_file(PUBLIC_DIR / 'login.html')
+            return
+
+        if path == '/register':
+            self.send_file(PUBLIC_DIR / 'register.html')
+            return
+
         # Try to serve static file
         filepath = PUBLIC_DIR / path.lstrip('/')
         if filepath.exists() and filepath.is_file():
@@ -381,8 +458,121 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Handle POST requests."""
+        global user_sessions
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path == '/api/register':
+            body = self.get_request_body()
+            email = body.get('email', '').strip()
+            password = body.get('password', '')
+            name = body.get('name', '').strip()
+
+            # Validate inputs
+            if not email or not password or not name:
+                self.send_json({'error': 'All fields are required'}, 400)
+                return
+
+            if not validate_email(email):
+                self.send_json({'error': 'Invalid email format'}, 400)
+                return
+
+            if len(password) < 8:
+                self.send_json({'error': 'Password must be at least 8 characters'}, 400)
+                return
+
+            if len(name) > 100:
+                self.send_json({'error': 'Name is too long (max 100 characters)'}, 400)
+                return
+
+            conn = get_db()
+            cursor = conn.cursor()
+
+            # Check if email already exists
+            cursor.execute('SELECT id FROM users WHERE email = ?', (email,))
+            if cursor.fetchone():
+                conn.close()
+                self.send_json({'error': 'Email already registered'}, 409)
+                return
+
+            # Hash password and create user
+            password_hash = hash_password(password)
+            cursor.execute(
+                'INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)',
+                (email, password_hash, name)
+            )
+            user_id = cursor.lastrowid
+            conn.commit()
+
+            # Get created user
+            cursor.execute('SELECT id, email, name, created_at FROM users WHERE id = ?', (user_id,))
+            user = row_to_dict(cursor.fetchone())
+            conn.close()
+
+            # Create session
+            session_id = self.get_session_id()
+            if not session_id:
+                session_id = str(uuid.uuid4())
+
+            user_sessions[session_id] = user_id
+
+            self.send_json({
+                'success': True,
+                'user': user
+            }, cookies={'sessionId': session_id})
+            return
+
+        if path == '/api/login':
+            body = self.get_request_body()
+            email = body.get('email', '').strip()
+            password = body.get('password', '')
+
+            if not email or not password:
+                self.send_json({'error': 'Email and password are required'}, 400)
+                return
+
+            conn = get_db()
+            cursor = conn.cursor()
+
+            # Look up user
+            cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+            user = row_to_dict(cursor.fetchone())
+
+            if not user or not verify_password(user['password_hash'], password):
+                conn.close()
+                self.send_json({'error': 'Invalid email or password'}, 401)
+                return
+
+            # Update last login
+            cursor.execute('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', (user['id'],))
+            conn.commit()
+            conn.close()
+
+            # Create or get session
+            session_id = self.get_session_id()
+            if not session_id:
+                session_id = str(uuid.uuid4())
+
+            user_sessions[session_id] = user['id']
+
+            self.send_json({
+                'success': True,
+                'user': {
+                    'id': user['id'],
+                    'email': user['email'],
+                    'name': user['name'],
+                    'created_at': user['created_at']
+                }
+            }, cookies={'sessionId': session_id})
+            return
+
+        if path == '/api/logout':
+            session_id = self.get_session_id()
+            if session_id and session_id in user_sessions:
+                del user_sessions[session_id]
+
+            self.send_json({'success': True})
+            return
 
         if path == '/api/cart':
             session_id = self.get_session_id()
@@ -484,10 +674,11 @@ class ConcertHandler(http.server.BaseHTTPRequestHandler):
                     }, 400)
                     return
 
-            # Create order with email
+            # Create order with email and user association
+            user_id = self.get_user_id()
             cursor.execute(
-                'INSERT INTO orders (session_id, customer_email, total_amount, status) VALUES (?, ?, ?, ?)',
-                (session_id, customer_email, total_amount, 'completed')
+                'INSERT INTO orders (session_id, user_id, customer_email, total_amount, status) VALUES (?, ?, ?, ?, ?)',
+                (session_id, user_id, customer_email, total_amount, 'completed')
             )
             order_id = cursor.lastrowid
 
